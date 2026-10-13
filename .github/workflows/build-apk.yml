@@ -18,10 +18,8 @@ jobs:
       - name: Prepare web files
         run: |
           mkdir -p www/icons
-          cp index.html www/
-          cp sw.js www/ || true
-          cp manifest.webmanifest www/ || true
-          cp icon-192.png icon-512.png www/icons/
+          cp index.html sw.js manifest.webmanifest www/
+          cp icons/*.png www/icons/
       - name: Create Android project
         run: |
           npm init -y
