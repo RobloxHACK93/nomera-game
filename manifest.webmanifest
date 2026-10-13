@@ -1,0 +1,1310 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="description" content="Игра «Генератор номеров»: крути барабан, собирай красивые российские номера, продавай их или клади в сейф.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Генератор номеров</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Russo+One&display=swap">
+<style>
+/* Layout: ночной автосалон. Витрина номеров по бокам, барабаны и цена в центре. Одна тёмная тема. */
+:root {
+  --bg: #0b0d10;
+  --bg-glow: #1b212a;
+  --panel: #13171c;
+  --panel-2: #1a1f26;
+  --line: #272d36;
+  --fg: #eceff3;
+  --muted: #8c95a1;
+  --accent: #ff4333;
+  --accent-deep: #9e2418;
+  --accent-ink: #ffffff;
+  --plate: #f5f5ef;
+  --plate-ink: #101214;
+  --flag-blue: #0039a6;
+  --flag-red: #d52b1e;
+  --c-common: #9aa4b1;  --g-common: rgba(154, 164, 177, .28);
+  --c-rare: #3b9bff;    --g-rare: rgba(59, 155, 255, .38);
+  --c-epic: #b46bff;    --g-epic: rgba(180, 107, 255, .42);
+  --c-legendary: #ffb520; --g-legendary: rgba(255, 181, 32, .5);
+  --f-display: 'Russo One', Impact, 'Arial Black', sans-serif;
+  --f-body: 'Golos Text', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --f-plate: 'Exo 2', Arial, Helvetica, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  background: radial-gradient(1100px 560px at 50% -8%, var(--bg-glow) 0%, transparent 62%), var(--bg);
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--f-body);
+  font-size: 16px;
+  line-height: 1.5;
+}
+#app { padding-inline: 16px; padding-block: 12px 48px; overflow-x: clip; }
+button, select { font-family: inherit; }
+:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* редкости */
+[data-rarity="common"]    { --rc: var(--c-common);    --rg: var(--g-common); }
+[data-rarity="rare"]      { --rc: var(--c-rare);      --rg: var(--g-rare); }
+[data-rarity="epic"]      { --rc: var(--c-epic);      --rg: var(--g-epic); }
+[data-rarity="legendary"] { --rc: var(--c-legendary); --rg: var(--g-legendary); }
+
+/* ===== номер ===== */
+/* знак как настоящий: белое поле, чёрная рамка с отступом от края, регион справа за вертикальной чертой */
+.plate {
+  position: relative; display: inline-flex; align-items: stretch; flex: none; padding: .04em; gap: .025em;
+  background: #0d0d0e; color: #0b0b0b; border-radius: .13em;
+  font-family: var(--f-plate); font-weight: 800; line-height: 1;
+  box-shadow: 0 .1em .35em rgba(0, 0, 0, .6), inset 0 0 0 .012em #3a3a3d, 0 0 0 .012em rgba(255, 255, 255, .18);
+}
+.plate-main, .plate-region {
+  background: linear-gradient(180deg, #ffffff, #f4f4f2 60%, #ffffff);
+  border-radius: .09em; box-shadow: inset 0 -.012em .02em rgba(0,0,0,.08);
+}
+.plate-main { display: flex; align-items: center; gap: .02em; padding: .06em .16em .06em .2em; }
+.plate-main .reel:nth-child(1), .plate-main .reel:nth-child(4) { margin-right: .14em; }
+.reel { position: relative; display: block; width: .6em; height: 1em; overflow: hidden; text-align: center; }
+.strip { display: block; will-change: transform; }
+.sym { display: flex; align-items: center; justify-content: center; gap: .04em; height: 1em; }
+.gl { display: block; flex: none; height: .78em; width: auto; aspect-ratio: 70 / 100; }
+.plate-region {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .05em;
+  min-width: 1.4em; padding: .03em .1em;
+}
+.region-code { font-size: .66em; line-height: 1; letter-spacing: .01em; }
+.region-code .rreel { width: 1.75em; }
+.rus { display: flex; align-items: center; justify-content: center; gap: .35em; font-size: .27em; letter-spacing: .16em; }
+.flag {
+  display: inline-block; width: 2.5em; height: 1.25em; flex: none; text-shadow: none;
+  background: linear-gradient(to bottom, #fff 0 33.3%, var(--flag-blue) 33.3% 66.6%, var(--flag-red) 66.6% 100%);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .45);
+}
+
+/* ===== меню ===== */
+.menu {
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 40px; align-items: center;
+  max-width: 1100px; margin: 0 auto; padding-block: clamp(24px, 8vh, 80px);
+}
+.eyebrow { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+.menu h1 {
+  margin: 0; font-family: var(--f-display); font-weight: 400; text-transform: uppercase;
+  font-size: clamp(38px, 7.4vw, 82px); line-height: .98; text-wrap: balance;
+}
+.menu .lead { color: var(--muted); max-width: 44ch; margin: 18px 0 28px; font-size: 17px; }
+.play {
+  font-family: var(--f-display); font-size: clamp(22px, 4vw, 30px); letter-spacing: .06em; text-transform: uppercase;
+  background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 16px;
+  padding: 18px 44px; min-height: 64px; cursor: pointer;
+  box-shadow: 0 7px 0 var(--accent-deep), 0 18px 36px rgba(255, 67, 51, .25);
+  transition: transform .12s, box-shadow .12s;
+}
+.play:hover { transform: translateY(-2px); }
+.play:active { transform: translateY(5px); box-shadow: 0 2px 0 var(--accent-deep); }
+.menu-plates { position: relative; isolation: isolate; display: grid; gap: 26px; justify-items: start; padding: 12px 8px; }
+.menu-plates::before {
+  content: ''; position: absolute; inset: -8% -6%; z-index: -1;
+  background: radial-gradient(closest-side, rgba(255, 181, 32, .14), transparent 72%);
+}
+.menu-plates .show {
+  width: auto; margin: 0; padding: 0; background: transparent; border: 0; box-shadow: none;
+  animation: floaty 7s ease-in-out infinite;
+}
+.menu-plates .show:nth-child(1) { transform: rotate(-3deg); }
+.menu-plates .show:nth-child(2) { margin-left: clamp(16px, 7vw, 56px); transform: rotate(1.5deg); animation-delay: -2.3s; }
+.menu-plates .show:nth-child(3) { margin-left: clamp(4px, 2vw, 16px); transform: rotate(-1.5deg); animation-delay: -4.6s; }
+.menu-plates .show .plate {
+  font-size: clamp(30px, 12vw, 64px); margin-inline: 0; overflow: hidden;
+  box-shadow: 0 .12em .4em rgba(0, 0, 0, .65), 0 0 .8em var(--rg), 0 0 0 .02em rgba(255, 255, 255, .3);
+}
+.menu-plates .show .plate::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, .85) 50%, transparent 58%);
+  transform: translateX(-130%); animation: sweep 5s ease-in-out infinite;
+}
+.menu-plates .show:nth-child(2) .plate::after { animation-delay: 1.6s; }
+.menu-plates .show:nth-child(3) .plate::after { animation-delay: 3.2s; }
+.menu-plates .cap { justify-content: flex-start; gap: 12px; margin-top: 12px; font-size: 13px; }
+@keyframes floaty { 50% { translate: 0 -8px; } }
+@keyframes sweep { 0%, 60% { transform: translateX(-130%); } 100% { transform: translateX(130%); } }
+
+/* ===== игра ===== */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  max-width: 1180px; margin: 0 auto; padding-block: 8px 18px;
+}
+.topbar h2 {
+  margin: 0; font-family: var(--f-display); font-weight: 400; text-transform: uppercase;
+  font-size: clamp(15px, 3.2vw, 22px); letter-spacing: .04em; text-align: center; min-width: 0;
+}
+.ghost {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 14px;
+  background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-size: 14px;
+}
+.ghost:hover { border-color: var(--muted); }
+.ghost svg { width: 18px; height: 18px; flex: none; }
+
+.stage { display: grid; grid-template-columns: 200px minmax(0, 1fr) 200px; gap: 16px; max-width: 1320px; margin: 0 auto; }
+.side {
+  position: relative; overflow: hidden; min-height: 700px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+}
+.track { display: flex; flex-direction: column; animation: scrollY 48s linear infinite; will-change: transform; }
+.side.right .track { animation-direction: reverse; }
+@keyframes scrollY { to { transform: translateY(-50%); } }
+@keyframes scrollX { to { transform: translateX(-50%); } }
+.game.enter .side.left  { --fx: -40px; --fy: 0px; animation: sideIn 1.2s .15s cubic-bezier(.22, 1, .36, 1) both; }
+.game.enter .side.right { --fx: 40px;  --fy: 0px; animation: sideIn 1.2s .3s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes sideIn { from { opacity: 0; transform: translate(var(--fx), var(--fy)); } to { opacity: 1; transform: none; } }
+
+.show {
+  flex: none; margin-bottom: 20px;
+  background: var(--panel); border: 1px solid var(--rc, var(--line)); border-radius: 14px; padding: 12px;
+  box-shadow: 0 0 26px var(--rg, transparent);
+}
+.show .plate { font-size: 25px; display: flex; width: max-content; max-width: 100%; margin-inline: auto; }
+.cap { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.cap span { color: var(--rc); font-weight: 600; }
+.cap b { font-weight: 500; color: var(--fg); white-space: nowrap; }
+
+.center { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.price-panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px;
+  transition: border-color .4s, box-shadow .4s;
+}
+.price-panel[data-rarity] { border-color: var(--rc); box-shadow: 0 0 44px var(--rg); }
+.label { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.price-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-top: 6px; }
+.price { font-family: var(--f-display); font-size: clamp(32px, 8vw, 54px); line-height: 1.05; font-variant-numeric: tabular-nums; color: var(--rc, var(--fg)); }
+.price.rolling { color: var(--muted); }
+.rub { font-family: var(--f-display); font-size: clamp(20px, 4vw, 28px); color: var(--muted); }
+.badge {
+  margin-left: auto; align-self: center; padding: 6px 14px; border-radius: 999px;
+  border: 1px solid var(--rc, var(--line)); color: var(--rc, var(--muted));
+  font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+}
+.tiers { list-style: none; margin: 16px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.tiers li {
+  display: grid; gap: 2px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; opacity: .62;
+  transition: opacity .3s, border-color .3s, background .3s;
+}
+.tiers li strong { font-size: 13px; color: var(--tc); display: flex; align-items: center; gap: 6px; }
+.tiers li strong::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--tc); flex: none; }
+.tiers li span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tiers li.on { opacity: 1; border-color: var(--tc); background: var(--tg); }
+.t-common { --tc: var(--c-common); --tg: var(--g-common); }
+.t-rare { --tc: var(--c-rare); --tg: var(--g-rare); }
+.t-epic { --tc: var(--c-epic); --tg: var(--g-epic); }
+.t-legendary { --tc: var(--c-legendary); --tg: var(--g-legendary); }
+
+.field { display: grid; gap: 6px; }
+select {
+  appearance: none; -webkit-appearance: none; width: 100%; min-height: 50px; padding: 12px 46px 12px 16px;
+  background-color: var(--panel-2); color: var(--fg); border: 1px solid var(--line); border-radius: 12px; font-size: 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%238c95a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 18px center;
+}
+select:disabled { opacity: .55; }
+select option { background: var(--panel-2); color: var(--fg); }
+
+.plate-wrap {
+  --ps: clamp(30px, 13.8vw, 124px);
+  position: relative; overflow: hidden; display: grid; place-items: center; padding: 40px 10px;
+  background: radial-gradient(520px 220px at 50% 50%, #1d232c, var(--panel));
+  border: 1px solid var(--line); border-radius: 20px; font-size: var(--ps);
+  transition: border-color .4s, box-shadow .4s;
+}
+.plate-wrap[data-rarity] { border-color: var(--rc); box-shadow: 0 0 60px var(--rg), inset 0 0 44px var(--rg); }
+.plate-wrap.shine::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 232, 170, .32) 50%, transparent 62%);
+  transform: translateX(-120%); animation: shine 1.5s ease .1s 2;
+}
+@keyframes shine { to { transform: translateX(120%); } }
+
+.spin {
+  font-family: var(--f-display); font-size: clamp(22px, 4.4vw, 28px); letter-spacing: .07em; text-transform: uppercase;
+  background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 16px; min-height: 68px; cursor: pointer;
+  box-shadow: 0 7px 0 var(--accent-deep), 0 16px 32px rgba(255, 67, 51, .22); transition: transform .12s, box-shadow .12s, opacity .2s;
+}
+.spin:hover:not(:disabled) { transform: translateY(-2px); }
+.spin:active:not(:disabled) { transform: translateY(5px); box-shadow: 0 2px 0 var(--accent-deep); }
+.spin:disabled { opacity: .6; cursor: default; transform: translateY(4px); box-shadow: 0 3px 0 var(--accent-deep); }
+
+.history { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+.history-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.history-head b { font-family: var(--f-display); font-weight: 400; font-size: 18px; font-variant-numeric: tabular-nums; }
+.history ul { list-style: none; margin: 10px 0 0; padding: 0; }
+.history li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.history li .plate { font-size: 21px; }
+.history li .meta div { text-align: right; min-width: 0; }
+.history li small { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--rc); font-weight: 600; }
+.history li .meta span { font-size: 15px; white-space: nowrap; }
+.why { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.why h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.why ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.why li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 14px; }
+.why li b { flex: none; color: var(--rc, var(--fg)); font-variant-numeric: tabular-nums; font-weight: 600; }
+.why p { margin: 0; font-size: 14px; color: var(--muted); }
+.plate-wrap .plate-main .strip, .plate-wrap .region-code .strip { transition: opacity .3s ease; }
+.plate-wrap.wiping .plate-main .strip, .plate-wrap.wiping .region-code .strip { opacity: 0; }
+.price-note { margin: 10px 0 0; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.hold-hint { margin: -4px 2px 0; font-size: 13px; color: var(--muted); text-align: center; }
+.plate-wrap.holdable .plate-main .reel { cursor: pointer; border-radius: .06em; transition: background .25s, box-shadow .25s; }
+.plate-wrap.holdable .plate-main .reel:hover { background: rgba(0, 0, 0, .07); }
+.plate-main .reel:focus-visible { outline: 2px solid var(--accent, #ff6a3d); outline-offset: 1px; }
+.plate-main .reel.held { background: rgba(255, 150, 40, .22); box-shadow: inset 0 -.045em 0 #ff8a2a; }
+.plate-main .reel.held::after {
+  content: ''; position: absolute; top: .03em; right: .02em; width: .13em; height: .13em; pointer-events: none;
+  background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23c25a00'%3E%3Cpath d='M7 10V7a5 5 0 0110 0v3h1.5A1.5 1.5 0 0120 11.500v9a1.500 1.500 0 01-1.500 1.500h-13A1.500 1.500 0 014 20.500v-9A1.500 1.500 0 015.500 10H7zm2 0h6V7a3 3 0 00-6 0v3z'/%3E%3C/svg%3E");
+}
+.top-view .top-note { margin-bottom: 4px; }
+.top-view li { position: relative; justify-items: stretch; }
+.top-view li .plate { justify-self: center; }
+.top-view .rank { justify-self: start; margin-bottom: -6px; font-family: var(--f-display); font-size: 15px; color: var(--rc); }
+.top-view .why { margin-top: 0; width: 100%; }
+.top-view .why li { display: flex; padding: 0; border: 0; background: none; box-shadow: none; gap: 12px; border-radius: 0; flex-wrap: nowrap; }
+.top-view .why ul { margin: 0; }
+.top-view .price-tag { font-family: var(--f-display); font-weight: 400; font-size: clamp(16px, 5vw, 20px); white-space: nowrap; color: var(--rc); }
+.top-view .meta { align-items: baseline; }
+.empty { margin: 10px 0 0; color: var(--muted); font-size: 14px; }
+
+.wallet {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px;
+}
+.wallet b { font-family: var(--f-display); font-weight: 400; font-size: clamp(22px, 5vw, 30px); font-variant-numeric: tabular-nums; }
+.wallet.up b { animation: flashUp .8s ease; }
+@keyframes flashUp { 0% { color: #5ee08a; transform: scale(1.06); } 100% { color: var(--fg); transform: none; } }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.act {
+  min-height: 60px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--fg); font-size: 16px; font-weight: 600; cursor: pointer;
+  font-variant-numeric: tabular-nums; transition: transform .12s, border-color .2s;
+}
+.act:hover { transform: translateY(-2px); }
+.act.sell { background: #1c8a4b; border-color: #2fb768; color: #fff; }
+.act.keep { border-color: var(--rc, var(--muted)); box-shadow: 0 0 22px var(--rg, transparent); }
+.mini {
+  min-height: 36px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line);
+  background: transparent; color: var(--fg); font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.mini:hover { border-color: #2fb768; color: #5ee08a; }
+.history li { flex-wrap: wrap; }
+.history li .mini { margin-left: auto; }
+@media (max-width: 560px) { .actions { grid-template-columns: 1fr; } .topbar h2 { display: none; }
+  .topbar { gap: 8px; flex-wrap: wrap; }
+  #muteText, .back-label { display: none; }
+  .tab { padding: 8px 12px; font-size: 14px; }
+  .tabs { gap: 2px; }
+}
+@media (min-width: 961px) {
+  .plate-wrap { --ps: clamp(44px, calc((100vw - 580px) / 5.8), 140px); }
+}
+
+.tb-left { display: flex; align-items: center; gap: 8px; }
+
+.tabs {
+  display: flex; gap: 6px; width: fit-content; max-width: 100%; margin: 0; padding: 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+}
+.tab {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 20px;
+  background: transparent; color: var(--muted); border: 0; border-radius: 10px;
+  font-size: 15px; font-weight: 600; cursor: pointer; transition: background .25s, color .25s;
+}
+.tab:hover { color: var(--fg); }
+.tab[aria-selected="true"] { background: var(--panel-2); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
+.tab svg { width: 20px; height: 20px; color: var(--c-legendary); }
+.tab.pulse { animation: pulse .7s ease; }
+.tab-count {
+  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; display: inline-grid; place-items: center;
+  background: var(--line); color: var(--fg); font-size: 12px; font-variant-numeric: tabular-nums;
+}
+
+.safe-view { max-width: 900px; margin: 0 auto; animation: rise .5s cubic-bezier(.2, .8, .2, 1) both; }
+.safe-view ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); gap: 14px; margin-top: 16px; }
+.safe-view li {
+  display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 14px; padding: 18px 16px 16px; border: 1px solid var(--rc); border-radius: 14px;
+  background: var(--panel-2); box-shadow: 0 0 22px var(--rg);
+}
+.safe-view li .plate { font-size: clamp(28px, 11vw, 48px); }
+.safe-view .meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
+.safe-view .meta div { text-align: left; }
+
+/* плавные переходы между экранами */
+.menu { transition: opacity .55s cubic-bezier(.4, 0, .2, 1), transform .55s cubic-bezier(.4, 0, .2, 1); }
+.menu.leaving { opacity: 0; transform: translateY(-22px) scale(.97); pointer-events: none; }
+.menu.entering { animation: rise .6s cubic-bezier(.2, .8, .2, 1) both; }
+.game { transition: opacity .35s ease, transform .35s ease; }
+.game.prep { position: fixed; inset: 0; opacity: 0; overflow: hidden; pointer-events: none; transition: none; }
+.game.enter .topbar, .game.enter .center > *, .game.enter .side { will-change: transform, opacity; }
+.game.leaving { opacity: 0; transform: translateY(12px); pointer-events: none; }
+.game.enter .topbar { animation: fadeDown .9s cubic-bezier(.22, 1, .36, 1) both; }
+.game.enter .center > * { animation: riseSoft 1.1s cubic-bezier(.22, 1, .36, 1) both; }
+.game.enter .center > :nth-child(1) { animation-delay: .12s; }
+.game.enter .center > :nth-child(2) { animation-delay: .22s; }
+.game.enter .center > :nth-child(3) { animation-delay: .32s; }
+.game.enter .center > .plate-wrap { animation: plateIn 1.2s .4s cubic-bezier(.22, 1, .36, 1) both; }
+.game.enter .center > .spin { animation-delay: .62s; }
+@keyframes fadeDown { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+@keyframes riseSoft { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+.stage.swap { animation: rise .45s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes plateIn { from { opacity: 0; transform: translateY(18px) scale(.94); } to { opacity: 1; transform: none; } }
+@media (max-width: 400px) { .tab svg { display: none; } .tab { padding: 8px 10px; } }
+.menu-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.menu-actions .ghost { min-height: 52px; padding-inline: 20px; font-size: 15px; }
+.reset-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; font-size: 14px; color: var(--muted); }
+.ghost.danger { border-color: var(--accent); color: #ff8b80; }
+.menu-stats { margin: 18px 0 0; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.safe-btn { position: relative; padding-inline: 12px; }
+.safe-btn svg { width: 24px; height: 24px; color: var(--c-legendary); }
+.safe-btn.pulse { animation: pulse .7s ease; }
+@keyframes pulse { 40% { transform: scale(1.2); border-color: var(--c-legendary); } }
+.count {
+  position: absolute; top: -7px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px;
+  display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; line-height: 1;
+}
+.modal {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px;
+  background: rgba(5, 6, 8, .8);
+}
+.modal-card { width: min(560px, 100%); max-height: min(82vh, 760px); overflow-y: auto; background: var(--panel-2); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.modal-head h3 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 24px; text-transform: uppercase; letter-spacing: .04em; }
+
+@media (max-width: 960px) {
+  .menu { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .stage { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .side {
+    min-height: 0;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+    mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  }
+  .track { flex-direction: row; width: max-content; animation-name: scrollX; animation-duration: 42s; }
+  .show { margin-bottom: 0; margin-right: 16px; width: 214px; }
+  .show .plate { font-size: 25px; }
+  .game.enter .side.left  { --fx: 0px; --fy: -20px; }
+  .game.enter .side.right { --fx: 0px; --fy: 20px; }
+}
+@media (max-width: 560px) {
+  .tiers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .badge { margin-left: 0; }
+  .plate-wrap { padding-block: 26px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .track, .menu-plates .show, .menu-plates .show .plate::after, .plate-wrap.shine::after { animation: none; }
+  .game.enter .side { animation: none; }
+  .menu, .game { transition: none; }
+  .game.enter .topbar, .game.enter .center > *,
+  .menu.entering, .stage.swap, .safe-view { animation: none; }
+}
+</style>
+<style>[hidden]{display:none!important} html,body{margin:0}</style>
+</head>
+<body>
+<main id="app">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><symbol id="g-O" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><rect x="9.5" y="7.5" width="51.0" height="85.0" rx="19"/></g></symbol><symbol id="g-d0" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><rect x="13.5" y="7.5" width="43.0" height="85.0" rx="17"/></g></symbol><symbol id="g-A" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 9.5 92.5 L 27.0 7.5 H 43.0 L 60.5 92.5"/><path d="M 18.0 67.2 H 52.0"/></g></symbol><symbol id="g-B" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 9.5 7.5 V 92.5 H 39.0 C 55.0 92.5 61.5 82.3 61.5 69.4 C 61.5 56.5 54.0 48.9 41.0 48.9 H 9.5"/><path d="M 9.5 48.9 H 37.0 C 51.0 48.9 58.0 41.4 58.0 28.5 C 58.0 15.6 52.0 7.5 37.0 7.5 H 9.5"/></g></symbol><symbol id="g-E" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 60.5 7.5 H 9.5 V 92.5 H 60.5"/><path d="M 9.5 50.0 H 55.0"/></g></symbol><symbol id="g-K" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 9.5 7.5 V 92.5"/><path d="M 60.5 7.5 L 13.5 56.5"/><path d="M 29.0 39.2 L 60.5 92.5"/></g></symbol><symbol id="g-M" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 9.5 92.5 V 7.5 L 35.0 67.2 L 60.5 7.5 V 92.5"/></g></symbol><symbol id="g-H" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 9.5 7.5 V 92.5"/><path d="M 60.5 7.5 V 92.5"/><path d="M 9.5 50.0 H 60.5"/></g></symbol><symbol id="g-P" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 9.5 92.5 V 7.5 H 39.0 C 55.0 7.5 61.0 17.7 61.0 30.6 C 61.0 43.5 53.0 54.3 37.0 54.3 H 9.5"/></g></symbol><symbol id="g-C" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 60.5 26.3 C 57.0 14.5 48.0 7.5 36.0 7.5 C 19.0 7.5 9.5 24.2 9.5 50.0 C 9.5 75.8 19.0 92.5 36.0 92.5 C 48.0 92.5 57.0 85.5 60.5 73.7"/></g></symbol><symbol id="g-T" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 4.0 7.5 H 66.0"/><path d="M 35.0 7.5 V 92.5"/></g></symbol><symbol id="g-Y" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 6.0 7.5 L 35.0 56.5 L 64.0 7.5"/><path d="M 35.0 56.5 V 92.5"/></g></symbol><symbol id="g-X" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 9.5 7.5 L 60.5 92.5"/><path d="M 60.5 7.5 L 9.5 92.5"/></g></symbol><symbol id="g-d1" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 14.0 26.3 L 37.0 7.5 V 92.5"/></g></symbol><symbol id="g-d2" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 13.0 28.5 C 13.0 15.6 22.0 7.5 35.0 7.5 C 49.0 7.5 57.0 15.6 57.0 28.5 C 57.0 45.7 43.0 58.6 13.0 92.5 H 61.0"/></g></symbol><symbol id="g-d3" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 13.0 22.0 C 17.0 12.3 25.0 7.5 35.0 7.5 C 49.0 7.5 57.0 14.5 57.0 26.3 C 57.0 39.2 48.0 46.8 33.0 46.8"/><path d="M 33.0 46.8 C 51.0 46.8 60.0 55.4 60.0 69.4 C 60.0 84.4 50.0 92.5 35.0 92.5 C 24.0 92.5 16.0 87.7 11.0 78.0"/></g></symbol><symbol id="g-d4" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 45.0 92.5 V 7.5 L 12.0 67.2 H 62.0"/></g></symbol><symbol id="g-d5" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 56.0 7.5 H 17.0 L 13.0 46.8 C 19.0 42.5 27.0 40.3 35.0 40.3 C 51.0 40.3 60.0 51.1 60.0 67.2 C 60.0 84.4 50.0 92.5 35.0 92.5 C 24.0 92.5 16.0 87.7 11.0 78.0"/></g></symbol><symbol id="g-d6" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 54.0 15.6 C 48.0 9.1 42.0 7.5 35.0 7.5 C 20.0 7.5 12.0 24.2 12.0 52.2 C 12.0 80.1 20.0 92.5 35.0 92.5 C 50.0 92.5 58.0 82.3 58.0 67.2 C 58.0 51.1 50.0 41.4 36.0 41.4 C 24.0 41.4 15.0 48.9 12.0 60.8"/></g></symbol><symbol id="g-d7" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 9.0 7.5 H 61.0 L 27.0 92.5"/></g></symbol><symbol id="g-d8" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><path d="M 35.0 7.5 C 21.0 7.5 14.0 14.5 14.0 25.3 C 14.0 37.1 22.0 44.6 35.0 46.8 C 49.0 48.9 58.0 56.5 58.0 69.4 C 58.0 83.4 49.0 92.5 35.0 92.5 C 21.0 92.5 12.0 83.4 12.0 69.4 C 12.0 56.5 21.0 48.9 35.0 46.8 C 48.0 44.6 56.0 37.1 56.0 25.3 C 56.0 14.5 49.0 7.5 35.0 7.5 Z"/></g></symbol><symbol id="g-d9" viewBox="0 0 70 100"><g fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"><use href="#g-d6" transform="rotate(180 35 50)"/></g></symbol></defs></svg>
+  <section id="menu" class="menu">
+    <div>
+      <p class="eyebrow">Игра · Россия · все регионы</p>
+      <h1>Генератор номеров</h1>
+      <p class="lead">Выбери регион, запусти барабан и узнай, сколько стоит выпавший номер. Один бросок стоит 80 000 ₽, на старте у тебя 500 000 ₽. Чем красивее и блатнее номер, тем он дороже. Четыре редкости: от обычного до легендарного.</p>
+      <div class="menu-actions">
+        <button id="play" class="play" type="button">Играть</button>
+        <button id="reset" class="ghost" type="button">Начать заново</button>
+      </div>
+      <div id="resetAsk" class="reset-ask" hidden>
+        <span>Сбросить баланс до 500 000 ₽ и очистить сейф?</span>
+        <button id="resetYes" class="ghost danger" type="button">Да, сбросить</button>
+        <button id="resetNo" class="ghost" type="button">Отмена</button>
+      </div>
+      <p id="menuStats" class="menu-stats"></p>
+    </div>
+    <div id="menuPlates" class="menu-plates" aria-hidden="true"></div>
+  </section>
+
+  <section id="game" class="game" hidden>
+    <header class="topbar">
+      <div class="tb-left">
+      <button id="back" class="ghost" type="button" aria-label="Меню">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+        <span class="back-label">Меню</span>
+      </button>
+      </div>
+      <nav class="tabs" role="tablist" aria-label="Разделы игры">
+        <button id="tabGame" class="tab" type="button" role="tab" aria-selected="true">Играть</button>
+        <button id="tabSafe" class="tab" type="button" role="tab" aria-selected="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="15" rx="2.2"/><circle cx="12" cy="11.5" r="3.6"/><path d="M12 8.2v1.4M12 13.4v1.4M8.7 11.5h1.4M13.9 11.5h1.4"/><path d="M6 19v2M18 19v2"/></svg>
+          Сейф <span id="tabCount" class="tab-count">0</span>
+        </button>
+        <button id="tabTop" class="tab" type="button" role="tab" aria-selected="false">Топ</button>
+      </nav>
+      <button id="mute" class="ghost" type="button" aria-pressed="false" aria-label="Выключить звук">
+        <svg id="muteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 5.5a9 9 0 010 13"/></svg>
+        <span id="muteText">Звук</span>
+      </button>
+    </header>
+
+    <div class="stage">
+      <aside class="side left" aria-hidden="true"><div class="track" id="trackL"></div></aside>
+
+      <div class="center">
+        <div id="wallet" class="wallet">
+          <span class="label">Баланс</span>
+          <b id="balance">500 000 ₽</b>
+        </div>
+        <section id="pricePanel" class="price-panel">
+          <div class="label">Цена выпавшего номера</div>
+          <div class="price-row">
+            <span id="price" class="price">—</span><span class="rub">₽</span>
+            <span id="badge" class="badge">Ждёт броска</span>
+          </div>
+          <ul id="tiers" class="tiers"></ul>
+          <p class="price-note">Цены близки к рыночным ценам на красивые номера: от 5 000 ₽ за обычный знак до десятков миллионов за самые громкие.</p>
+          <div id="why" class="why" hidden></div>
+        </section>
+
+        <div class="field">
+          <label class="label" for="region">Регион номера</label>
+          <select id="region"></select>
+        </div>
+
+        <div id="plateWrap" class="plate-wrap"></div>
+        <p id="holdHint" class="hold-hint" hidden></p>
+
+        <div id="actions" class="actions" hidden>
+          <button id="sell" class="act sell" type="button">Продать</button>
+          <button id="keep" class="act keep" type="button">Поставить в сейф</button>
+        </div>
+
+        <button id="spin" class="spin" type="button">Крутить · 80 000 ₽</button>
+        <button id="restart" class="ghost" type="button" hidden>Деньги кончились. Начать заново с 500 000 ₽</button>
+
+      </div>
+
+      <aside class="side right" aria-hidden="true"><div class="track" id="trackR"></div></aside>
+    </div>
+    <div id="status" class="sr" role="status" aria-live="polite"></div>
+
+    <section id="safeView" class="safe-view history" hidden>
+      <div class="modal-head"><h3>Сейф</h3></div>
+      <div class="history-head">
+        <span class="label">Номеров: <span id="safeCount">0</span></span>
+        <span class="label">Стоимость <b id="total">0 ₽</b></span>
+      </div>
+      <p id="empty" class="empty">Сейф пуст. Нажми «Поставить в сейф» под выпавшим номером, и он появится здесь.</p>
+      <ul id="hist"></ul>
+    </section>
+    <section id="topView" class="safe-view history top-view" hidden>
+      <div class="modal-head"><h3>Топ моих номеров</h3></div>
+      <p class="empty top-note">Самые дорогие номера из тех, что ты продал или поставил в сейф. Под каждым указано, за что он ценится.</p>
+      <p id="topEmpty" class="empty">Пока пусто. Продай номер или поставь его в сейф, и он появится здесь.</p>
+      <ul id="topList"></ul>
+    </section>
+  </section>
+</main>
+
+<script id="logic">
+/* ===== данные и правила цены (без DOM) ===== */
+const LETTERS = ['А','В','Е','К','М','Н','О','Р','С','Т','У','Х'];
+
+const REGIONS = [
+  ['Республика Адыгея', ['01']],
+  ['Республика Башкортостан', ['02','102','702']],
+  ['Республика Бурятия', ['03','103']],
+  ['Республика Алтай', ['04']],
+  ['Республика Дагестан', ['05','105']],
+  ['Республика Ингушетия', ['06']],
+  ['Кабардино-Балкарская Республика', ['07']],
+  ['Республика Калмыкия', ['08']],
+  ['Карачаево-Черкесская Республика', ['09']],
+  ['Республика Карелия', ['10']],
+  ['Республика Коми', ['11']],
+  ['Республика Марий Эл', ['12']],
+  ['Республика Мордовия', ['13','113']],
+  ['Республика Саха (Якутия)', ['14']],
+  ['Республика Северная Осетия — Алания', ['15']],
+  ['Республика Татарстан', ['16','116','716']],
+  ['Республика Тыва', ['17']],
+  ['Удмуртская Республика', ['18','118']],
+  ['Республика Хакасия', ['19']],
+  ['Чеченская Республика', ['20','95']],
+  ['Чувашская Республика', ['21','121']],
+  ['Алтайский край', ['22','122']],
+  ['Краснодарский край', ['23','93','123','193']],
+  ['Красноярский край', ['24','88','124']],
+  ['Приморский край', ['25','125']],
+  ['Ставропольский край', ['26','126']],
+  ['Хабаровский край', ['27']],
+  ['Амурская область', ['28']],
+  ['Архангельская область', ['29']],
+  ['Астраханская область', ['30']],
+  ['Белгородская область', ['31']],
+  ['Брянская область', ['32']],
+  ['Владимирская область', ['33']],
+  ['Волгоградская область', ['34','134']],
+  ['Вологодская область', ['35']],
+  ['Воронежская область', ['36','136']],
+  ['Ивановская область', ['37']],
+  ['Иркутская область', ['38','138']],
+  ['Калининградская область', ['39','91']],
+  ['Калужская область', ['40']],
+  ['Камчатский край', ['41']],
+  ['Кемеровская область — Кузбасс', ['42','142']],
+  ['Кировская область', ['43']],
+  ['Костромская область', ['44']],
+  ['Курганская область', ['45']],
+  ['Курская область', ['46']],
+  ['Ленинградская область', ['47','147']],
+  ['Липецкая область', ['48']],
+  ['Магаданская область', ['49']],
+  ['Московская область', ['50','90','150','190','750','790']],
+  ['Мурманская область', ['51']],
+  ['Нижегородская область', ['52','152']],
+  ['Новгородская область', ['53']],
+  ['Новосибирская область', ['54','154']],
+  ['Омская область', ['55','155']],
+  ['Оренбургская область', ['56','156']],
+  ['Орловская область', ['57']],
+  ['Пензенская область', ['58']],
+  ['Пермский край', ['59','159']],
+  ['Псковская область', ['60']],
+  ['Ростовская область', ['61','161','761']],
+  ['Рязанская область', ['62']],
+  ['Самарская область', ['63','163','763']],
+  ['Саратовская область', ['64','164']],
+  ['Сахалинская область', ['65']],
+  ['Свердловская область', ['66','96','196']],
+  ['Смоленская область', ['67']],
+  ['Тамбовская область', ['68']],
+  ['Тверская область', ['69']],
+  ['Томская область', ['70']],
+  ['Тульская область', ['71']],
+  ['Тюменская область', ['72']],
+  ['Ульяновская область', ['73','173']],
+  ['Челябинская область', ['74','174','774']],
+  ['Забайкальский край', ['75']],
+  ['Ярославская область', ['76']],
+  ['Москва', ['77','97','99','177','197','199','777','797','799']],
+  ['Санкт-Петербург', ['78','98','178','198']],
+  ['Еврейская автономная область', ['79']],
+  ['Донецкая Народная Республика', ['80']],
+  ['Луганская Народная Республика', ['81']],
+  ['Республика Крым', ['82']],
+  ['Ненецкий автономный округ', ['83']],
+  ['Херсонская область', ['84','184']],
+  ['Запорожская область', ['85','185']],
+  ['Ханты-Мансийский АО — Югра', ['86','186']],
+  ['Чукотский автономный округ', ['87']],
+  ['Ямало-Ненецкий автономный округ', ['89']],
+  ['Севастополь', ['92']],
+  ['Байконур', ['94']]
+].sort((a, b) => parseInt(a[1][0], 10) - parseInt(b[1][0], 10));
+
+const TIERS = [
+  /* диапазоны по рынку красивых номеров: от минимального тарифа 5 тыс. ₽ до сотен миллионов у самых громких знаков */
+  { id: 'common',    name: 'Обычный',     min: 5000,     max: 65000,     p0: 0,  p1: 9,   k: 1,   round: 500 },
+  { id: 'rare',      name: 'Редкий',      min: 65000,    max: 400000,    p0: 10, p1: 24,  k: 1.8, round: 5000 },
+  { id: 'epic',      name: 'Эпический',   min: 400000,   max: 6000000,   p0: 25, p1: 59,  k: 2.2, round: 50000 },
+  { id: 'legendary', name: 'Легендарный', min: 6000000,  max: 60000000,  p0: 60, p1: 100, k: 3.5, round: 500000 }
+];
+
+const REGION_BONUS = {
+  '77': 6, '97': 5, '99': 5, '177': 8, '197': 8, '199': 8, '777': 16, '797': 8, '799': 8,
+  '78': 4, '98': 3, '178': 4, '198': 3,
+  '50': 3, '90': 3, '150': 3, '190': 3, '750': 5, '790': 5,
+  '116': 2, '716': 3, '102': 2, '702': 3, '161': 2, '761': 3, '163': 2, '763': 3, '774': 3, '196': 2, '186': 2
+};
+
+function tierByPoints(p) {
+  for (let i = TIERS.length - 1; i >= 0; i--) if (p >= TIERS[i].p0) return TIERS[i];
+  return TIERS[0];
+}
+function hash01(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return ((h >>> 0) % 10000) / 10000;
+}
+function plateText(p) { return p.l1 + p.d.join('') + p.l2 + p.l3; }
+function parsePlate(s, code) {
+  return { l1: s[0], d: [+s[1], +s[2], +s[3]], l2: s[4], l3: s[5], code: code };
+}
+
+/* очки красоты номера: чем больше, тем дороже */
+function evaluate(p) {
+  const a = p.d[0], b = p.d[1], c = p.d[2];
+  let pts = 0;
+  const triple = a === b && b === c && a !== 0;
+  if (triple) pts += ({ 7: 48, 8: 40, 9: 40, 6: 30 })[a] || 28;
+  else {
+    if (a === 0 && b === 0 && c > 0) pts += c === 7 ? 46 : c === 1 ? 38 : 30;      // 00X, 007
+    else if (b === 0 && c === 0 && a > 0) pts += a === 7 ? 22 : 18;                // X00
+    else if (b === a + 1 && c === b + 1) pts += a === 1 ? 22 : 16;                 // 123, 234 ...
+    else if (b === a - 1 && c === b - 1) pts += c === 1 ? 18 : 12;                 // 321, 987 ...
+    else if (a === c && a !== b) pts += 8;                                         // 121
+    else if (a === b || b === c) pts += 3;                                         // 112, 133
+    const sevens = (a === 7) + (b === 7) + (c === 7);
+    pts += Math.min(2, sevens);
+  }
+  const l1 = p.l1, l2 = p.l2, l3 = p.l3;
+  const tripleLetters = l1 === l2 && l2 === l3;
+  if (tripleLetters) pts += 24;
+  else {
+    if (l2 === l3) pts += 6;
+    else if (l1 === l2 || l1 === l3) pts += 2;
+  }
+  if (l1 === 'Е' && l2 === 'К' && l3 === 'Х') pts += 18;
+  if (triple && tripleLetters) pts += 8;
+  let rb = REGION_BONUS[p.code];
+  if (rb === undefined) rb = (p.code.length >= 2 && /^(\d)\1+$/.test(p.code)) ? 4 : 0;
+  pts += rb;
+  if (triple && new RegExp('^' + a + '+$').test(p.code)) pts += 10;
+  return Math.min(100, pts);
+}
+/* за что номер ценится: те же правила, что в evaluate, но с описанием */
+function explain(p) {
+  const a = p.d[0], b = p.d[1], c = p.d[2], out = [];
+  const add = (t, n) => { if (n > 0) out.push({ t: t, n: n }); };
+  const triple = a === b && b === c && a !== 0;
+  const digits = '' + a + b + c;
+  if (triple) add('Три одинаковые цифры ' + digits, ({ 7: 48, 8: 40, 9: 40, 6: 30 })[a] || 28);
+  else {
+    if (a === 0 && b === 0 && c > 0) add(c === 7 ? 'Номер «007» — как у Джеймса Бонда' : 'Два нуля впереди: ' + digits, c === 7 ? 46 : c === 1 ? 38 : 30);
+    else if (b === 0 && c === 0 && a > 0) add('Круглая «сотка» ' + digits, a === 7 ? 22 : 18);
+    else if (b === a + 1 && c === b + 1) add('Цифры по порядку ' + digits, a === 1 ? 22 : 16);
+    else if (b === a - 1 && c === b - 1) add('Цифры по убыванию ' + digits, c === 1 ? 18 : 12);
+    else if (a === c && a !== b) add('Зеркальные цифры ' + digits, 8);
+    else if (a === b || b === c) add('Пара одинаковых цифр в ' + digits, 3);
+    const sevens = (a === 7) + (b === 7) + (c === 7);
+    add(sevens === 1 ? 'Счастливая семёрка' : 'Несколько семёрок', Math.min(2, sevens));
+  }
+  const tripleLetters = p.l1 === p.l2 && p.l2 === p.l3;
+  if (tripleLetters) add('Три одинаковые буквы ' + p.l1 + p.l2 + p.l3, 24);
+  else if (p.l2 === p.l3) add('Пара одинаковых букв ' + p.l2 + p.l3, 6);
+  else if (p.l1 === p.l2 || p.l1 === p.l3) add('Повтор буквы ' + p.l1, 2);
+  if (p.l1 === 'Е' && p.l2 === 'К' && p.l3 === 'Х') add('Легендарные буквы ЕКХ', 18);
+  if (triple && tripleLetters) add('Цифры и буквы — одинаковые тройки', 8);
+  let rb = REGION_BONUS[p.code];
+  if (rb === undefined) rb = (p.code.length >= 2 && /^(\d)\1+$/.test(p.code)) ? 4 : 0;
+  add('Престижный регион ' + p.code, rb);
+  if (triple && new RegExp('^' + a + '+$').test(p.code)) add('Цифры совпадают с регионом ' + p.code, 10);
+  return out;
+}
+function priceOf(p) {
+  const pts = evaluate(p);
+  const tier = tierByPoints(pts);
+  const h = hash01(plateText(p) + p.code);
+  let x = (pts - tier.p0 + h) / (tier.p1 - tier.p0 + 1);
+  x = Math.max(0, Math.min(1, x));
+  let price = tier.min + (tier.max - tier.min) * Math.pow(x, tier.k);
+  price = Math.round(price / tier.round) * tier.round;
+  price = Math.max(tier.min, Math.min(tier.max, price));
+  return { pts: pts, tier: tier, price: price };
+}
+
+/* ===== генерация ===== */
+function rnd(n) { return Math.floor(Math.random() * n); }
+function pick(a) { return a[rnd(a.length)]; }
+function randomPlate(codes) {
+  let d;
+  do { d = [rnd(10), rnd(10), rnd(10)]; } while (d[0] === 0 && d[1] === 0 && d[2] === 0);
+  return { l1: pick(LETTERS), d: d, l2: pick(LETTERS), l3: pick(LETTERS), code: pick(codes) };
+}
+const MODS = {
+  triple: p => { const x = 1 + rnd(9); p.d = [x, x, x]; },
+  seven:  p => { p.d = [7, 7, 7]; },
+  bond:   p => { p.d = [0, 0, 7]; },
+  zz:     p => { p.d = [0, 0, 1 + rnd(9)]; },
+  hundred: p => { p.d = [1 + rnd(9), 0, 0]; },
+  asc:    p => { const s = 1 + rnd(7); p.d = [s, s + 1, s + 2]; },
+  desc:   p => { const s = 3 + rnd(7); p.d = [s, s - 1, s - 2]; },
+  pal:    p => { const a = rnd(10); let b = rnd(10); if (b === a) b = (b + 1) % 10; p.d = [a, b, a]; },
+  pairD:  p => { const a = rnd(10); p.d = [a, a, (a + 1 + rnd(9)) % 10]; },
+  triL:   p => { const l = pick(LETTERS); p.l1 = p.l2 = p.l3 = l; },
+  pairL:  p => { p.l3 = p.l2; },
+  ekh:    p => { p.l1 = 'Е'; p.l2 = 'К'; p.l3 = 'Х'; }
+};
+const POOLS = {
+  rare: [['hundred'], ['asc'], ['desc'], ['pal', 'pairL'], ['pairD', 'pairL'], ['pairL', 'asc'], ['hundred', 'pairL'], ['pal', 'ekh']],
+  epic: [['triple'], ['zz'], ['desc', 'ekh'], ['asc', 'ekh'], ['pal', 'triL'], ['triple', 'pairL'], ['hundred', 'triL'], ['asc', 'triL']],
+  legendary: [['seven', 'triL'], ['triple', 'triL'], ['seven', 'ekh'], ['bond', 'ekh'], ['bond', 'triL'], ['seven', 'triL', 'ekh']]
+};
+function rollTier() {
+  const r = Math.random() * 100;
+  return r < 62 ? 'common' : r < 84 ? 'rare' : r < 96 ? 'epic' : 'legendary';
+}
+function generate(codes, forcedTier) {
+  const want = forcedTier || rollTier();
+  let best = null;
+  for (let i = 0; i < 400; i++) {
+    const p = randomPlate(codes);
+    if (want === 'common') {
+      if (Math.random() < .12) p.d[rnd(3)] = 7;
+    } else {
+      pick(POOLS[want]).forEach(m => MODS[m](p));
+    }
+    const r = priceOf(p);
+    best = { plate: p, pts: r.pts, tier: r.tier, price: r.price };
+    if (r.tier.id === want) return best;
+  }
+  return best;
+}
+</script>
+
+<script>
+(function () {
+  const $ = s => document.querySelector(s);
+  const fmt = n => n.toLocaleString('ru-RU');
+  /* буквы и цифры знака нарисованы как на номерах РФ (символы в начале страницы) */
+  const GK = { 'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O', 'Р': 'P', 'С': 'C', 'Т': 'T', 'У': 'Y', 'Х': 'X' };
+  function glyph(ch) {
+    return '<svg class="gl" viewBox="0 0 70 100" aria-hidden="true"><use href="#g-' + (GK[ch] || ('d' + ch)) + '"/></svg>';
+  }
+  function symHTML(str) { return '<span class="sym">' + String(str).split('').map(glyph).join('') + '</span>'; }
+
+  /* ---------- разметка номера ---------- */
+  function plateHTML(p) {
+    const s = [p.l1, p.d[0], p.d[1], p.d[2], p.l2, p.l3];
+    const reels = s.map(c => '<span class="reel"><span class="strip">' + symHTML(c) + '</span></span>').join('');
+    return '<div class="plate"><div class="plate-main">' + reels + '</div>' +
+      '<div class="plate-region"><span class="region-code"><span class="reel rreel"><span class="strip">' + symHTML(p.code) + '</span></span></span>' +
+      '<span class="rus">RUS<i class="flag"></i></span></div></div>';
+  }
+  function showItem(s, code) {
+    const p = parsePlate(s, code), r = priceOf(p);
+    return '<div class="show" data-rarity="' + r.tier.id + '">' + plateHTML(p) +
+      '<div class="cap"><span>' + r.tier.name + '</span><b>' + fmt(r.price) + ' ₽</b></div></div>';
+  }
+
+  /* ---------- витрина ---------- */
+  const SHOW_L = [['Е777КХ','77'],['А001АА','199'],['М007МР','77'],['О777ОО','777'],['Х999ХХ','50'],['В888ВВ','99'],['А123ВС','178'],['Т100ТТ','78']];
+  const SHOW_R = [['С777СС','199'],['К555КК','197'],['А005АА','777'],['Е321КХ','97'],['Н777НН','116'],['М666ММ','716'],['Р101РР','161'],['У234УУ','163']];
+  const dup = list => list.concat(list).map(x => showItem(x[0], x[1])).join('');
+  $('#trackL').innerHTML = dup(SHOW_L);
+  $('#trackR').innerHTML = dup(SHOW_R);
+  $('#menuPlates').innerHTML = [['Е777КХ','77'],['А001АА','199'],['О777ОО','777']].map(x => showItem(x[0], x[1])).join('');
+
+  /* ---------- редкости ---------- */
+  $('#tiers').innerHTML = TIERS.map(t =>
+    '<li class="t-' + t.id + '" data-id="' + t.id + '"><strong>' + t.name + '</strong><span>' + fmt(t.min) + ' – ' + fmt(t.max) + ' ₽</span></li>'
+  ).join('');
+
+  /* ---------- регионы ---------- */
+  const regionSel = $('#region');
+  const ALL_CODES = Array.from(new Set(REGIONS.map(r => r[1]).flat()));
+  regionSel.innerHTML = '<option value="all">Все регионы · случайный код</option>' +
+    REGIONS.map((r, i) => '<option value="' + i + '">' + r[1][0] + ' · ' + r[0] + '</option>').join('');
+  let startVal = String(REGIONS.findIndex(r => r[0] === 'Москва'));
+  try {
+    const raw = localStorage.getItem('nomera-region');
+    const saved = parseInt(raw, 10);
+    if (raw === 'all') startVal = 'all';
+    else if (saved >= 0 && saved < REGIONS.length) startVal = String(saved);
+  } catch (e) {}
+  regionSel.value = startVal;
+  function regionInfo() { return regionSel.value === 'all' ? ['Все регионы', ALL_CODES] : REGIONS[+regionSel.value]; }
+  function idleCode() { return regionSel.value === 'all' ? '77' : REGIONS[+regionSel.value][1][0]; }
+
+  /* ---------- центральный номер ---------- */
+  const plateWrap = $('#plateWrap');
+  let current = ['А', '1', '2', '3', 'В', 'С'];
+  plateWrap.innerHTML = plateHTML({ l1: 'А', d: [1, 2, 3], l2: 'В', l3: 'С', code: idleCode() });
+  const reelEls = Array.from(plateWrap.querySelectorAll('.plate-main .reel'));
+  /* фиксация: понравившиеся буквы и цифры можно оставить, тогда они не крутятся */
+  const held = [false, false, false, false, false, false];
+  let hasResult = false, regionLocked = false;
+  const holdHint = $('#holdHint');
+  function updateHold() {
+    const n = held.filter(Boolean).length;
+    plateWrap.classList.toggle('holdable', hasResult && !spinning);
+    holdHint.hidden = !hasResult;
+    regionSel.disabled = spinning || regionLocked;   /* после прокрутки с оставленными символами регион заперт, пока номер не продан или не убран в сейф */
+    holdHint.textContent = (n
+      ? 'Оставлено символов: ' + n + ' (по ' + fmt(HOLD_COST) + ' ₽ за каждый). Они не крутятся, остальные получат новые значения.'
+      : 'Нажми на букву или цифру номера, чтобы оставить её на следующую прокрутку: ' + fmt(HOLD_COST) + ' ₽ за каждый символ.')
+      + (regionLocked ? ' Регион менять нельзя, пока не продашь номер или не положишь в сейф.' : '');
+  }
+  function toggleHold(i) {
+    if (spinning || !hasResult) return;
+    if (!held[i] && held.filter(Boolean).length >= 5) { holdHint.textContent = 'Хотя бы один символ должен крутиться.'; return; }
+    if (!held[i] && balance < SPIN_COST + HOLD_COST * (held.filter(Boolean).length + 1)) {
+      holdHint.textContent = 'Не хватает денег: оставить символ стоит ' + fmt(HOLD_COST) + ' ₽ сверху к цене броска.';
+      return;
+    }
+    held[i] = !held[i];
+    reelEls[i].classList.toggle('held', held[i]);
+    reelEls[i].setAttribute('aria-pressed', String(held[i]));
+    updateHold(); refreshSpin();
+  }
+  function clearHolds() {
+    held.fill(false); hasResult = false; regionLocked = false;
+    reelEls.forEach(el => { el.classList.remove('held'); el.setAttribute('aria-pressed', 'false'); });
+    updateHold();
+  }
+  reelEls.forEach((el, i) => {
+    el.setAttribute('role', 'button'); el.tabIndex = 0; el.setAttribute('aria-pressed', 'false');
+    el.addEventListener('click', () => toggleHold(i));
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleHold(i); } });
+  });
+  const regionBox = plateWrap.querySelector('.plate-region');
+  const regionReel = plateWrap.querySelector('.rreel');
+  let currentCode = idleCode();
+  function setRegionCode(c) {
+    currentCode = c;
+    const s = regionReel.querySelector('.strip');
+    s.style.transform = 'none'; s.style.filter = 'none';
+    s.innerHTML = symHTML(c);
+  }
+  const KINDS = ['L', 'D', 'D', 'D', 'L', 'L'];
+
+  /* после продажи или сейфа на знаке остаётся одна рамка: символы плавно гаснут и стираются */
+  let blank = false, wipeTimer = 0;
+  function finishWipe() {
+    if (!wipeTimer) return;
+    clearTimeout(wipeTimer); wipeTimer = 0;
+    plateWrap.classList.remove('wiping');
+    current = ['', '', '', '', '', ''];
+    reelEls.forEach(el => { const st = el.querySelector('.strip'); st.style.transform = 'none'; st.style.filter = 'none'; st.innerHTML = symHTML(''); el.classList.remove('land'); });
+    setRegionCode('');
+  }
+  function wipePlate() {
+    blank = true;
+    clearHolds();
+    plateWrap.removeAttribute('data-rarity'); plateWrap.classList.remove('shine');
+    if (calm) { wipeTimer = 1; finishWipe(); return; }
+    plateWrap.classList.add('wiping');
+    clearTimeout(wipeTimer);
+    wipeTimer = setTimeout(finishWipe, 320);
+  }
+
+  function popRegion() {
+    regionBox.classList.remove('pop'); void regionBox.offsetWidth; regionBox.classList.add('pop');
+  }
+  regionSel.addEventListener('change', () => {
+    setRegionCode(blank ? '' : idleCode());
+    if (!blank) popRegion();
+    try { localStorage.setItem('nomera-region', regionSel.value); } catch (e) {}
+  });
+
+  /* ---------- звук барабана ---------- */
+  let actx = null, master = null, noiseBuf = null, muted = false;
+  function ensureAudio() {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      actx = new AC();
+      const comp = actx.createDynamicsCompressor();
+      master = actx.createGain(); master.gain.value = .8;
+      master.connect(comp); comp.connect(actx.destination);
+      noiseBuf = actx.createBuffer(1, Math.floor(actx.sampleRate * .25), actx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (actx.state === 'suspended') actx.resume();
+  }
+  function noiseHit(t, freq, q, vol, len) {
+    const src = actx.createBufferSource(); src.buffer = noiseBuf;
+    const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = q;
+    const g = actx.createGain();
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + len);
+    src.connect(bp); bp.connect(g); g.connect(master);
+    src.start(t, Math.random() * .15); src.stop(t + len + .02);
+  }
+  function thump(t, f0, f1, vol, len) {
+    const o = actx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + len * .8);
+    const g = actx.createGain();
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + len);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + len + .02);
+  }
+  function tickSound() {
+    if (muted || !actx) return;
+    const t = actx.currentTime;
+    noiseHit(t, 1500 + Math.random() * 700, 1.2, .32, .05);
+    thump(t, 190, 80, .3, .07);
+  }
+  function stopSound() {
+    if (muted || !actx) return;
+    const t = actx.currentTime;
+    thump(t, 130, 48, .75, .24);
+    noiseHit(t, 900, .9, .35, .08);
+  }
+  function chime(id) {
+    if (muted || !actx) return;
+    const seqs = { common: [523], rare: [523, 659], epic: [523, 659, 784], legendary: [523, 659, 784, 1047, 1319, 1568] };
+    const t = actx.currentTime + .05;
+    seqs[id].forEach((f, i) => {
+      const o = actx.createOscillator(); o.type = id === 'legendary' ? 'triangle' : 'sine'; o.frequency.value = f;
+      const g = actx.createGain(), st = t + i * .09;
+      g.gain.setValueAtTime(.0001, st);
+      g.gain.exponentialRampToValueAtTime(.22, st + .02);
+      g.gain.exponentialRampToValueAtTime(.0001, st + .8);
+      o.connect(g); g.connect(master); o.start(st); o.stop(st + .85);
+    });
+  }
+  const muteBtn = $('#mute');
+  muteBtn.addEventListener('click', () => {
+    muted = !muted;
+    muteBtn.setAttribute('aria-pressed', String(muted));
+    muteBtn.setAttribute('aria-label', muted ? 'Включить звук' : 'Выключить звук');
+    $('#muteText').textContent = muted ? 'Без звука' : 'Звук';
+    $('#muteIcon').innerHTML = muted
+      ? '<path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M22 9l-6 6"/><path d="M16 9l6 6"/>'
+      : '<path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 5.5a9 9 0 010 13"/>';
+  });
+
+  /* ---------- экраны ---------- */
+  const menu = $('#menu'), game = $('#game');
+  const calm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  let switching = false;
+  function goGame() {
+    if (switching) return;
+    switching = true;
+    ensureAudio();
+    /* игру собираем заранее, невидимой: вёрстка и отрисовка проходят, пока гаснет меню, и сама анимация идёт без рывков */
+    game.classList.remove('enter'); game.classList.add('prep');
+    game.hidden = false; setTab('game', true);
+    menu.classList.add('leaving');
+    setTimeout(() => {
+      menu.hidden = true; menu.classList.remove('leaving');
+      game.classList.remove('prep');
+      void game.offsetWidth; game.classList.add('enter');
+      window.scrollTo(0, 0);
+      switching = false;
+    }, calm ? 0 : 560);
+  }
+  function goMenu() {
+    if (switching || spinning) return;
+    switching = true;
+    game.classList.add('leaving');
+    setTimeout(() => {
+      game.hidden = true; game.classList.remove('leaving', 'enter');
+      menu.hidden = false;
+      menu.classList.remove('entering'); void menu.offsetWidth; menu.classList.add('entering');
+      window.scrollTo(0, 0);
+      switching = false;
+    }, calm ? 0 : 350);
+  }
+  if (!calm) menu.classList.add('entering');
+  $('#play').addEventListener('click', goGame);
+  $('#back').addEventListener('click', goMenu);
+
+  /* ---------- состояние UI ---------- */
+  const whyEl = $('#why');
+  const pricePanel = $('#pricePanel'), priceEl = $('#price'), badge = $('#badge');
+  const spinBtn = $('#spin'), status = $('#status');
+  const tierEls = Array.from(document.querySelectorAll('#tiers li'));
+  let spinning = false;
+
+  function countUp(to) {
+    const t0 = performance.now(), dur = 1000;
+    priceEl.classList.remove('rolling');
+    (function step(n) {
+      const x = Math.min(1, (n - t0) / dur), e = 1 - Math.pow(1 - x, 3);
+      priceEl.textContent = fmt(x < 1 ? Math.round(to * e) : to);
+      if (x < 1) requestAnimationFrame(step);
+    })(t0);
+  }
+
+  /* ---------- баланс и сейф ---------- */
+  const START_BALANCE = 500000;
+  let balance = START_BALANCE, pending = null;
+  const safe = [], trophies = [];
+  function loadList(arr, out) {
+    (arr || []).forEach(x => {
+      const tier = TIERS.find(t => t.id === x.tier);
+      if (tier && x.plate && Array.isArray(x.plate.d) && typeof x.price === 'number') out.push({ plate: x.plate, tier: tier, price: x.price });
+    });
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem('nomera-save') || 'null');
+    if (saved && typeof saved.balance === 'number' && Array.isArray(saved.safe)) {
+      balance = saved.balance;
+      loadList(saved.top, trophies);
+      saved.safe.forEach(x => {
+        const tier = TIERS.find(t => t.id === x.tier);
+        if (tier && x.plate && Array.isArray(x.plate.d) && typeof x.price === 'number') safe.push({ plate: x.plate, tier: tier, price: x.price });
+      });
+    }
+  } catch (e) {}
+  function persist() {
+    try {
+      localStorage.setItem('nomera-save', JSON.stringify({
+        balance: balance,
+        safe: safe.map(h => ({ plate: h.plate, tier: h.tier.id, price: h.price })),
+        top: trophies.map(h => ({ plate: h.plate, tier: h.tier.id, price: h.price }))
+      }));
+    } catch (e) {}
+  }
+  const wallet = $('#wallet'), actions = $('#actions');
+  function updateMenuStats() {
+    $('#menuStats').textContent = 'Баланс: ' + fmt(balance) + ' ₽ · В сейфе: ' + safe.length + ' шт.';
+  }
+  function renderBalance(flash) {
+    updateMenuStats();
+    $('#balance').textContent = fmt(balance) + ' ₽';
+    if (flash) { wallet.classList.remove('up'); void wallet.offsetWidth; wallet.classList.add('up'); }
+  }
+  function renderHistory() {
+    $('#empty').hidden = safe.length > 0;
+    $('#safeCount').textContent = safe.length;
+    $('#tabCount').textContent = safe.length;
+    updateMenuStats();
+    $('#hist').innerHTML = safe.map((h, i) =>
+      '<li data-rarity="' + h.tier.id + '">' + plateHTML(h.plate) +
+      '<div class="meta"><div><small>' + h.tier.name + '</small><span>' + fmt(h.price) + ' ₽</span></div>' +
+      '<button class="mini" type="button" data-i="' + i + '">Продать</button></div></li>'
+    ).join('');
+    $('#total').textContent = fmt(safe.reduce((s, h) => s + h.price, 0)) + ' ₽';
+  }
+  const SPIN_COST = 80000, HOLD_COST = 50000;
+  const heldCount = () => held.filter(Boolean).length;
+  const spinCost = () => SPIN_COST + HOLD_COST * heldCount();
+  function refreshSpin() {
+    if (spinning) return;
+    const cost = spinCost(), ok = balance >= cost;
+    spinBtn.disabled = !ok;
+    spinBtn.textContent = ok ? 'Крутить · ' + fmt(cost) + ' ₽' : 'Не хватает на бросок';
+    $('#restart').hidden = !(!pending && balance < SPIN_COST && safe.length === 0);
+  }
+  function resolvePending() {
+    pending = null;
+    actions.hidden = true;
+    refreshSpin();
+  }
+  $('#restart').addEventListener('click', () => {
+    balance = START_BALANCE;
+    renderBalance(true); persist(); refreshSpin();
+  });
+
+  /* новая игра из меню */
+  const resetAsk = $('#resetAsk'), resetBtn = $('#reset');
+  resetBtn.addEventListener('click', () => { resetAsk.hidden = false; resetBtn.hidden = true; });
+  $('#resetNo').addEventListener('click', () => { resetAsk.hidden = true; resetBtn.hidden = false; });
+  $('#resetYes').addEventListener('click', () => {
+    balance = START_BALANCE; safe.length = 0; trophies.length = 0; pending = null; clearHolds();
+    actions.hidden = true;
+    renderBalance(false); renderHistory(); renderTop(); persist(); refreshSpin();
+    resetAsk.hidden = true; resetBtn.hidden = false;
+  });
+  function addTrophy(x) {
+    trophies.push({ plate: x.plate, tier: x.tier, price: x.price });
+    trophies.sort((a, b) => b.price - a.price);
+    if (trophies.length > 20) trophies.length = 20;
+    renderTop();
+  }
+  $('#sell').addEventListener('click', () => {
+    if (!pending) return;
+    balance += pending.price;
+    addTrophy(pending);
+    wipePlate();
+    status.textContent = 'Номер продан за ' + fmt(pending.price) + ' рублей';
+    resolvePending(); renderBalance(true); persist();
+  });
+  $('#keep').addEventListener('click', () => {
+    if (!pending) return;
+    safe.unshift(pending);
+    addTrophy(pending);
+    wipePlate();
+    status.textContent = 'Номер в сейфе';
+    resolvePending(); renderHistory(); persist();
+    const sb = $('#tabSafe');
+    sb.classList.remove('pulse'); void sb.offsetWidth; sb.classList.add('pulse');
+  });
+  $('#hist').addEventListener('click', e => {
+    const btn = e.target.closest('.mini');
+    if (!btn) return;
+    const i = +btn.dataset.i, item = safe[i];
+    if (!item) return;
+    safe.splice(i, 1);
+    balance += item.price;
+    status.textContent = 'Номер продан за ' + fmt(item.price) + ' рублей';
+    renderBalance(true); renderHistory(); persist(); refreshSpin();
+  });
+
+  /* ---------- вращение ---------- */
+  function symsOf(p) { return [p.l1, String(p.d[0]), String(p.d[1]), String(p.d[2]), p.l2, p.l3]; }
+  function randSym(kind) { return kind === 'L' ? pick(LETTERS) : String(rnd(10)); }
+
+  function spin() {
+    if (spinning || balance < spinCost()) return;
+    const cost = spinCost();
+    finishWipe(); blank = false;
+    if (held.some(Boolean)) regionLocked = true;
+    pending = null; actions.hidden = true;   /* непроданный номер можно прокрутить ещё раз: он просто исчезнет */
+    balance -= cost;
+    renderBalance(false); persist();
+    spinning = true;
+    ensureAudio();
+    const region = regionInfo();
+    let res = generate(region[1]);
+    if (held.some(Boolean)) {
+      const p = res.plate, keep = (i, v) => held[i] ? current[i] : v;
+      p.l1 = keep(0, p.l1); p.d = [+keep(1, p.d[0]), +keep(2, p.d[1]), +keep(3, p.d[2])]; p.l2 = keep(4, p.l2); p.l3 = keep(5, p.l3);
+      const r = priceOf(p);
+      res = { plate: p, pts: r.pts, tier: r.tier, price: r.price };
+    }
+    const target = symsOf(res.plate);
+    updateHold();
+
+    pricePanel.removeAttribute('data-rarity');
+    plateWrap.removeAttribute('data-rarity');
+    plateWrap.classList.remove('shine');
+    tierEls.forEach(li => li.classList.remove('on'));
+    badge.textContent = 'Крутим…';
+    whyEl.hidden = true;
+    priceEl.classList.add('rolling');
+    spinBtn.disabled = true; regionSel.disabled = true;
+    spinBtn.textContent = 'Крутим…';
+    status.textContent = 'Барабан крутится';
+
+    const specs = reelEls.map((el, i) => ({ el: el, cur: current[i], tgt: target[i], pool: () => randSym(KINDS[i]) })).filter((s, i) => !held[i]);
+    specs.push({ el: regionReel, cur: currentCode, tgt: res.plate.code, pool: () => pick(region[1]) });
+    const reels = specs.map((s, i) => {
+      const el = s.el;
+      el.classList.remove('land');
+      const dur = 2200 + i * 520;
+      const n = Math.round(45 * dur / 1000 * 0.6);   // быстрая прокрутка, около 45 символов в секунду
+      const items = [s.cur];
+      for (let k = 1; k < n; k++) items.push(s.pool());
+      items.push(s.tgt);
+      const strip = el.querySelector('.strip');
+      strip.innerHTML = items.map(c => symHTML(c)).join('');
+      strip.style.transform = 'translate3d(0,0,0)';
+      return { el: el, strip: strip, n: n, dur: dur, K: n / 0.6, p: 0, done: false, last: s.tgt, h: el.getBoundingClientRect().height };
+    });
+
+    const t0 = performance.now();
+    let prev = t0, lastTick = 0, lastFlick = 0;
+
+    function frame(now) {
+      const dt = Math.max(1, now - prev); prev = now;
+      let alive = false, crossings = 0;
+      reels.forEach(r => {
+        if (r.done) return;
+        const x = Math.min(1, (now - t0) / r.dur);
+        // первую половину времени барабан летит с постоянной скоростью, потом долго и плавно тормозит
+        let p;
+        if (x <= 0.4) p = r.K * x;
+        else { const y = (x - 0.4) / 0.6; p = r.K * 0.4 + r.K * 0.6 * (1 - Math.pow(1 - y, 3)) / 3; }
+        if (x >= 1) p = r.n;
+        crossings += Math.floor(p) - Math.floor(r.p);
+        const v = (p - r.p) / dt * 1000;
+        r.p = p;
+        if (x >= 1) {
+          r.done = true;
+          r.strip.style.filter = 'none';
+          r.strip.style.transform = 'none';
+          r.strip.innerHTML = symHTML(r.last);
+          void r.el.offsetWidth;
+          r.el.classList.add('land');
+          stopSound();
+        } else {
+          alive = true;
+          r.strip.style.transform = 'translate3d(0,' + (-p * r.h) + 'px,0)';
+          r.strip.style.filter = v > 10 ? 'blur(' + Math.min(3.4, (v - 10) / 12).toFixed(2) + 'px)' : 'none';
+        }
+      });
+      if (crossings > 0 && now - lastTick > 34) { tickSound(); lastTick = now; }
+      if (now - lastFlick > 70) {
+        lastFlick = now;
+        const val = Math.exp(Math.log(5000) + Math.random() * (Math.log(60000000) - Math.log(5000)));
+        priceEl.textContent = fmt(Math.round(val / 500) * 500);
+      }
+      if (alive) requestAnimationFrame(frame); else finish();
+    }
+
+    function finish() {
+      current = target;
+      hasResult = true;
+      currentCode = res.plate.code;
+      popRegion();
+      pricePanel.dataset.rarity = res.tier.id;
+      plateWrap.dataset.rarity = res.tier.id;
+      badge.textContent = res.tier.name;
+      tierEls.forEach(li => li.classList.toggle('on', li.dataset.id === res.tier.id));
+      const why = explain(res.plate);
+      whyEl.innerHTML = '<h3>За что такая цена</h3>' + (why.length
+        ? '<ul>' + why.map(w => '<li><span>' + w.t + '</span><b>+' + w.n + '</b></li>').join('') + '</ul>'
+        : '<p>Ничем не примечательное сочетание, поэтому цена минимальная.</p>');
+      whyEl.hidden = false;
+      countUp(res.price);
+      chime(res.tier.id);
+      if (res.tier.id === 'epic' || res.tier.id === 'legendary') {
+        void plateWrap.offsetWidth; plateWrap.classList.add('shine');
+      }
+      pending = { plate: res.plate, tier: res.tier, price: res.price };
+      actions.dataset.rarity = res.tier.id;
+      $('#sell').textContent = 'Продать за ' + fmt(res.price) + ' ₽';
+      actions.hidden = false;
+      status.textContent = plateText(res.plate) + ' ' + res.plate.code + ': ' + res.tier.name + ', ' + fmt(res.price) + ' рублей.';
+      spinning = false;
+      updateHold();
+      refreshSpin();
+    }
+
+    requestAnimationFrame(frame);
+  }
+  spinBtn.addEventListener('click', spin);
+
+  /* вкладки: игра и сейф */
+  const stage = document.querySelector('.stage'), safeView = $('#safeView'), topView = $('#topView');
+  const tabGame = $('#tabGame'), tabSafe = $('#tabSafe'), tabTop = $('#tabTop');
+  function renderTop() {
+    $('#topEmpty').hidden = trophies.length > 0;
+    $('#topList').innerHTML = trophies.map((x, i) =>
+      '<li data-rarity="' + x.tier.id + '"><span class="rank">#' + (i + 1) + '</span>' + plateHTML(x.plate) +
+      '<div class="meta"><div><small>' + x.tier.name + '</small></div><b class="price-tag">' + fmt(x.price) + ' ₽</b></div>' +
+      '<div class="why"><h3>За что дорогой</h3>' + (function () {
+        const w = explain(x.plate);
+        return w.length ? '<ul>' + w.map(r => '<li><span>' + r.t + '</span><b>+' + r.n + '</b></li>').join('') + '</ul>'
+          : '<p>Ничем не примечательное сочетание, поэтому цена невысокая.</p>';
+      })() + '</div></li>'
+    ).join('');
+  }
+  renderTop();
+  function setTab(name, quiet) {
+    const gameOn = name === 'game';
+    stage.hidden = !gameOn; safeView.hidden = name !== 'safe'; topView.hidden = name !== 'top';
+    tabGame.setAttribute('aria-selected', String(gameOn));
+    tabSafe.setAttribute('aria-selected', String(name === 'safe'));
+    tabTop.setAttribute('aria-selected', String(name === 'top'));
+    if (gameOn && !quiet) { stage.classList.remove('swap'); void stage.offsetWidth; stage.classList.add('swap'); }
+    if (!quiet) window.scrollTo(0, 0);
+  }
+  tabGame.addEventListener('click', () => setTab('game'));
+  tabSafe.addEventListener('click', () => setTab('safe'));
+  tabTop.addEventListener('click', () => setTab('top'));
+
+  renderBalance(false);
+  renderHistory();
+  refreshSpin();
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); });
+}
+</script>
+</body>
+</html>
